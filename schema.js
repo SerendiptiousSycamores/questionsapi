@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
+const productSchema = new Schema({
+  product_id: {type: Number, required: true}
+});
+
 const questionSchema = new Schema({
   // will use objectId provided by MongodDB as unique identifier
   question_body: {type: String, required: true, maxLength: 1000},
