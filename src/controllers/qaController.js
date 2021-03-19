@@ -10,6 +10,7 @@ const loopAnswersToGetPhotos = (answers, object) => {
   }));
 };
 
+// this thing needs optimization!!!
 const loopQuestionsToGetAnswers = (questions) => {
   return Promise.all(questions.map(question=>{
     return db.query('SELECT * from answers where question_id = $1',[question.id])
@@ -34,6 +35,7 @@ const loopQuestionsToGetAnswers = (questions) => {
             // console.log(returnedQuestion)
             return returnedQuestion;
           })
+          .catch(err=>{throw err})
         // console.log(returnedAnswers)
         // let answers = returnedAnswers.rows[0].json_object_agg
         // let keys = Object.keys(answers);
@@ -78,7 +80,8 @@ exports.postQuestion =  (req,res) => {
 }
 
 exports.upvoteQuestion =  (req,res) => {
-  const {question_id} = req.body;
+  const {question_id} = req.params;
+  console.log(question_id)
   db.query('SELECT question_helpfulness from questions where id = $1 ',
   [question_id])
     .then(result=>{
@@ -90,7 +93,7 @@ exports.upvoteQuestion =  (req,res) => {
 }
 
 exports.reportQuestion =  (req,res) => {
-  const {question_id} = req.body;
+  const {question_id} = req.params;
   db.query('UPDATE questions SET reported = true WHERE id = $1',[question_id])
     .then(result=>{
       res.send(`Reported question with question id ${question_id}`);
@@ -102,7 +105,7 @@ exports.getAnswers =  (req,res) => {
   const {question_id, count, page} = req.query;
   const responseObj = {};
   responseObj.question_id = question_id;
-  // what is page?
+  // what is page? might need to fix this
   responseObj.page = 0;
   const answer = [];
   db.query('SELECT * from answers where question_id = $1 order by created_at desc limit $2',[question_id, count || 5 ])
@@ -120,7 +123,7 @@ exports.getAnswers =  (req,res) => {
 
 exports.postAnswer =  (req,res) => {
   const {body, name, email, photos} = req.body;
-  const {question_id} = req.query;
+  const {question_id} = req.params;
   db.query('INSERT INTO answers (answer_body, answerer_name, answerer_email, question_id, created_at) values($1, $2, $3, $4, $5)', [body, name, email, question_id, new Date().toJSON()])
     .then(success=>{
       if (photos.length !== 0) {
@@ -141,7 +144,7 @@ exports.postAnswer =  (req,res) => {
 }
 
 exports.upvoteAnswer =  (req,res) => {
-  const {answer_id} = req.body;
+  const {answer_id} = req.params;
   db.query('SELECT helpfulness from answers where id = $1 ',
   [answer_id])
     .then(result=>{
@@ -153,7 +156,7 @@ exports.upvoteAnswer =  (req,res) => {
 }
 
 exports.reportAnswer =  (req,res) => {
-  const {answer_id} = req.body;
+  const {answer_id} = req.params;
   db.query('UPDATE answers SET reported = true WHERE id = $1',[answer_id])
     .then(result=>{
       res.send(`Reported question with answer id ${answer_id}`);

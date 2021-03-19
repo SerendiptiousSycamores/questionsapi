@@ -4,12 +4,12 @@ const router = express.Router();
 
 router.get('/questions', controller.getQuestions );
 router.post('/questions', controller.postQuestion);
-router.put('/questions/helpful', controller.upvoteQuestion);
-router.put('/questions/report', controller.reportQuestion);
+router.put('/questions/:question_id/helpful', controller.upvoteQuestion);
+router.put('/questions/:question_id/report', controller.reportQuestion);
 
 router.get('/answers', controller.getAnswers);
-router.post('/answers', controller.postAnswer);
-router.put('/answers/helpful', controller.upvoteAnswer);
-router.put('/answers/report', controller.reportAnswer);
+router.post('/:question_id/answers', controller.postAnswer);
+router.put('/answers/:answer_id/helpful', controller.upvoteAnswer);
+router.put('/answers/:answer_id/report', controller.reportAnswer);
 
 module.exports = router;
