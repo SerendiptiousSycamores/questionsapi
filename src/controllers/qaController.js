@@ -1,21 +1,74 @@
 const db = require('../db');
 
+const loopAnswersToGetPhotos = (answers, object) => {
+  return Promise.all(answers.map(answer=>{
+    return db.query('SELECT * FROM photos WHERE answer_id = $1',[answer.id])
+      .then(photos=>{
+        answer.photos = photos.rows;
+        return answer;
+      })
+  }));
+};
+
+// this thing needs optimization!!!
+const loopQuestionsToGetAnswers = (questions) => {
+  return Promise.all(questions.map(question=>{
+    return db.query('SELECT * from answers where question_id = $1',[question.id])
+      .then(returnedAnswers => {
+        let returnedQuestion = question;
+        return Promise.all(returnedAnswers.rows.map(answer=>{
+          return db.query('select url,id from photos where answer_id = $1', [answer.id])
+            .then(photos=>{
+              answer.photos = photos.rows;
+              return answer;
+            })
+        }))
+          .then(values=>{
+            const obj = {}
+            for (var answer of values) {
+              obj[answer.id] = answer;
+            }
+            return obj;
+          })
+          .then(finalResult=>{
+            returnedQuestion.answers = finalResult;
+            // console.log(returnedQuestion)
+            return returnedQuestion;
+          })
+          .catch(err=>{throw err})
+        // console.log(returnedAnswers)
+        // let answers = returnedAnswers.rows[0].json_object_agg
+        // let keys = Object.keys(answers);
+        // Promise.all(Object.keys(answers).map(key=>{
+        //   return db.query('select url,id from photos where answer_id = $1', [key])
+        //     .then(photos=>{
+        //       console.log(photos)
+        //       answers[key].photos = photos.rows;
+        //       return answers[key];
+        //     })
+        // }))
+        //   .then(values=>console.log(values))
+      })
+  }));
+};
+
+
+
 exports.getQuestions = (req,res) => {
   const responseObj = {};
   const {product_id, count} = req.query;
 
-  db.query(`SELECT * from questions WHERE product_id = $1 and reported = $2 limit $3`, [product_id, 0, count || 5])
+  db.query('SELECT * FROM questions WHERE product_id = $1 ORDER BY question_date DESC limit $2', [product_id,  count || 5])
     .then(result=>{
-      responseObj.product_id = product_id
-      responseObj.results = result.rows;
-      const questionList = result.rows.map(result=>`question_id = ${result.id}`);
-      return db.query(`SELECT * from answers WHERE ${questionList.join(' or ')}`)
-    })
-    .then(answers=>{
-      responseObj.answers = answers.rows;
-      res.send(responseObj);
-    })
-    .catch(err=>{throw err});
+      responseObj.product_id = product_id;
+      let questions = result.rows;
+      loopQuestionsToGetAnswers(questions)
+        .then(values=>{
+          responseObj.results = values;
+          res.send(responseObj);
+        })
+      })
+      .catch(err=>{throw err});
 }
 
 exports.postQuestion =  (req,res) => {
@@ -27,7 +80,8 @@ exports.postQuestion =  (req,res) => {
 }
 
 exports.upvoteQuestion =  (req,res) => {
-  const {question_id} = req.body;
+  const {question_id} = req.params;
+  console.log(question_id)
   db.query('SELECT question_helpfulness from questions where id = $1 ',
   [question_id])
     .then(result=>{
@@ -39,7 +93,7 @@ exports.upvoteQuestion =  (req,res) => {
 }
 
 exports.reportQuestion =  (req,res) => {
-  const {question_id} = req.body;
+  const {question_id} = req.params;
   db.query('UPDATE questions SET reported = true WHERE id = $1',[question_id])
     .then(result=>{
       res.send(`Reported question with question id ${question_id}`);
@@ -48,20 +102,65 @@ exports.reportQuestion =  (req,res) => {
 }
 
 exports.getAnswers =  (req,res) => {
-  const {question_id} = req.query;
-  db.query('SELECT * FROM answers WHERE question_id = $1',[question_id])
-    .then(result=>res.send(result.rows[0]))
+  const {question_id, count, page} = req.query;
+  const responseObj = {};
+  responseObj.question_id = question_id;
+  // what is page? might need to fix this
+  responseObj.page = 0;
+  const answer = [];
+  db.query('SELECT * from answers where question_id = $1 order by created_at desc limit $2',[question_id, count || 5 ])
+    .then(result=>{
+      let answers = result.rows;
+      loopAnswersToGetPhotos(answers)
+        .then(values=>{
+          responseObj.count = values.length;
+          responseObj.results = values;
+          res.send(responseObj);
+        })
+    })
     .catch(err=>{throw err});
 }
 
 exports.postAnswer =  (req,res) => {
-  res.send('post answers');
+  const {body, name, email, photos} = req.body;
+  const {question_id} = req.params;
+  db.query('INSERT INTO answers (answer_body, answerer_name, answerer_email, question_id, created_at) values($1, $2, $3, $4, $5)', [body, name, email, question_id, new Date().toJSON()])
+    .then(success=>{
+      if (photos.length !== 0) {
+        db.query("SELECT currval('answers_id_seq')")
+          .then(lastIndex=>{
+            Promise.all(photos.map(photo=>{
+              return db.query('INSERT INTO photos (url, answer_id) values($1, $2)', [photos, lastIndex.rows[0].currval])
+                .then(success=>console.log(`inserted photo for answer id: ${lastIndex}` ))
+            }))
+            .then(photoSuccess => res.send(`posted answer and inserted ${photos.length} photos`))
+          })
+          .catch(err=>{throw err})
+      } else {
+        res.send('posted answer!')
+      }
+    })
+    .catch(err=>{throw err})
 }
 
 exports.upvoteAnswer =  (req,res) => {
-  res.send('upvote answer');
+  const {answer_id} = req.params;
+  db.query('SELECT helpfulness from answers where id = $1 ',
+  [answer_id])
+    .then(result=>{
+      return db.query('UPDATE answers SET helpfulness = $1 WHERE id = $2', [result.rows[0].helpfulness+1, answer_id]);
+    })
+    .then(finished=>res.send(`Upvoted an answer with answer id: ${answer_id}`))
+    .catch(err=>{throw err});
+
 }
 
 exports.reportAnswer =  (req,res) => {
-  res.send('report answer');
+  const {answer_id} = req.params;
+  db.query('UPDATE answers SET reported = true WHERE id = $1',[answer_id])
+    .then(result=>{
+      res.send(`Reported question with answer id ${answer_id}`);
+    })
+    .catch(err=>{throw err});
+
 }

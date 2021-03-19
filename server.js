@@ -8,5 +8,5 @@ app.use(express.json());
 app.use('/qa', qaRouter);
 
 app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`)
+  console.log(`Questions and Answers service listening at http://localhost:${port}`)
 })
