@@ -2,7 +2,7 @@ const db = require('../db');
 
 const loopAnswersToGetPhotos = (answers, object) => {
   return Promise.all(answers.map(answer=>{
-    return db.query('SELECT * FROM photos WHERE answer_id = $1',[answer.id])
+    return db.query('SELECT id,url FROM photos WHERE answer_id = $1',[answer.id])
       .then(photos=>{
         answer.photos = photos.rows;
         return answer;
@@ -13,7 +13,7 @@ const loopAnswersToGetPhotos = (answers, object) => {
 // this thing needs optimization!!!
 const loopQuestionsToGetAnswers = (questions) => {
   return Promise.all(questions.map(question=>{
-    return db.query('SELECT * from answers where question_id = $1',[question.id])
+    return db.query('SELECT id,answer_body,answerer_name,helpfulness,reported from answers where question_id = $1 and reported = $2',[question.id, false])
       .then(returnedAnswers => {
         let returnedQuestion = question;
         return Promise.all(returnedAnswers.rows.map(answer=>{
@@ -58,7 +58,7 @@ exports.getQuestions = (req,res) => {
   const responseObj = {};
   const {product_id, count} = req.query;
 
-  db.query('SELECT * FROM questions WHERE product_id = $1 ORDER BY question_date DESC limit $2', [product_id,  count || 5])
+  db.query('SELECT id,question_body,asker_name,question_date,reported,question_helpfulness FROM questions WHERE product_id = $1 and reported = $2 ORDER BY question_helpfulness DESC limit $3', [product_id, false, count || 5])
     .then(result=>{
       responseObj.product_id = product_id;
       let questions = result.rows;
@@ -108,7 +108,7 @@ exports.getAnswers =  (req,res) => {
   // what is page? might need to fix this
   responseObj.page = 0;
   const answer = [];
-  db.query('SELECT * from answers where question_id = $1 order by created_at desc limit $2',[question_id, count || 5 ])
+  db.query('SELECT id,answer_body,answerer_name,helpfulness,reported from answers where question_id = $1 and reported = $2 order by helpfulness DESC limit $3',[question_id, false, count || 5 ])
     .then(result=>{
       let answers = result.rows;
       loopAnswersToGetPhotos(answers)
