@@ -32,32 +32,16 @@ const loopQuestionsToGetAnswers = (questions) => {
           })
           .then(finalResult=>{
             returnedQuestion.answers = finalResult;
-            // console.log(returnedQuestion)
             return returnedQuestion;
           })
           .catch(err=>{throw err})
-        // console.log(returnedAnswers)
-        // let answers = returnedAnswers.rows[0].json_object_agg
-        // let keys = Object.keys(answers);
-        // Promise.all(Object.keys(answers).map(key=>{
-        //   return db.query('select url,id from photos where answer_id = $1', [key])
-        //     .then(photos=>{
-        //       console.log(photos)
-        //       answers[key].photos = photos.rows;
-        //       return answers[key];
-        //     })
-        // }))
-        //   .then(values=>console.log(values))
       })
   }));
 };
 
-
-
 exports.getQuestions = (req,res) => {
   const responseObj = {};
   const {product_id, count} = req.query;
-
   db.query('SELECT id,question_body,asker_name,question_date,reported,question_helpfulness FROM questions WHERE product_id = $1 and reported = $2 ORDER BY question_helpfulness DESC limit $3', [product_id, false, count || 5])
     .then(result=>{
       responseObj.product_id = product_id;
