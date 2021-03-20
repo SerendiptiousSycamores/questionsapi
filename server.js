@@ -10,3 +10,4 @@ app.use('/qa', qaRouter);
 app.listen(port, () => {
   console.log(`Questions and Answers service listening at http://localhost:${port}`)
 })
+
