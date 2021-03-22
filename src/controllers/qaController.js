@@ -1,58 +1,16 @@
 const db = require('../db');
 
-const loopAnswersToGetPhotos = (answers, object) => {
-  return Promise.all(answers.map(answer=>{
-    return db.query('SELECT id,url FROM photos WHERE answer_id = $1',[answer.id])
-      .then(photos=>{
-        answer.photos = photos.rows;
-        return answer;
-      })
-  }));
-};
-
-// this thing needs optimization!!!
-const loopQuestionsToGetAnswers = (questions) => {
-  return Promise.all(questions.map(question=>{
-    return db.query('SELECT id,answer_body,answerer_name,helpfulness,reported from answers where question_id = $1 and reported = $2',[question.id, false])
-      .then(returnedAnswers => {
-        let returnedQuestion = question;
-        return Promise.all(returnedAnswers.rows.map(answer=>{
-          return db.query('select url,id from photos where answer_id = $1', [answer.id])
-            .then(photos=>{
-              answer.photos = photos.rows;
-              return answer;
-            })
-        }))
-          .then(values=>{
-            const obj = {}
-            for (var answer of values) {
-              obj[answer.id] = answer;
-            }
-            return obj;
-          })
-          .then(finalResult=>{
-            returnedQuestion.answers = finalResult;
-            return returnedQuestion;
-          })
-          .catch(err=>{throw err})
-      })
-  }));
-};
-
 exports.getQuestions = (req,res) => {
   const responseObj = {};
   const {product_id, count} = req.query;
-  db.query('SELECT id,question_body,asker_name,question_date,reported,question_helpfulness FROM questions WHERE product_id = $1 and reported = $2 ORDER BY question_helpfulness DESC limit $3', [product_id, false, count || 5])
-    .then(result=>{
-      responseObj.product_id = product_id;
-      let questions = result.rows;
-      loopQuestionsToGetAnswers(questions)
-        .then(values=>{
-          responseObj.results = values;
-          res.send(responseObj);
-        })
-      })
-      .catch(err=>{throw err});
+  db.query(
+    'select array_to_json(array_agg(t)) from (select *,(select json_object_agg(d.id, d) from (select *,( select array_to_json(array_agg(row_to_json(c))) from ( select id, url from photos where photos.answer_id = answers.id )c ) as photos from answers where answers.question_id = questions.id and answers.reported = false ) d ) as answers from questions where questions.product_id  = $1 and questions.reported = false order by question_helpfulness DESC limit $2 ) t', [product_id, count || 5])
+  .then(result=>{
+    responseObj.product_id = product_id;
+    responseObj.results = result.rows[0]['array_to_json'];
+    res.send(responseObj)
+  })
+  .catch(err=>{throw err})
 }
 
 exports.postQuestion =  (req,res) => {
@@ -87,22 +45,16 @@ exports.reportQuestion =  (req,res) => {
 
 exports.getAnswers =  (req,res) => {
   const {question_id, count, page} = req.query;
-  const responseObj = {};
-  responseObj.question_id = question_id;
-  // what is page? might need to fix this
-  responseObj.page = 0;
-  const answer = [];
-  db.query('SELECT id,answer_body,answerer_name,helpfulness,reported from answers where question_id = $1 and reported = $2 order by helpfulness DESC limit $3',[question_id, false, count || 5 ])
-    .then(result=>{
-      let answers = result.rows;
-      loopAnswersToGetPhotos(answers)
-        .then(values=>{
-          responseObj.count = values.length;
-          responseObj.results = values;
-          res.send(responseObj);
-        })
-    })
-    .catch(err=>{throw err});
+  const responseObj = {question:question_id,count: count || 5 ,page:0};
+  db.query(
+    'select array_to_json(array_agg(row_to_json(t))) from (select *, (select array_to_json(array_agg(row_to_json(d))) from ( select id, url from photos where photos.answer_id  = answers.id )d ) as photos  from answers where answers.question_id = $1 and answers.reported = false order by helpfulness DESC limit $2)t', [question_id, responseObj.count])
+      .then(result=>{
+        responseObj.results = result.rows[0]['array_to_json']
+        res.send(responseObj);
+      })
+      .catch(err=>{throw err})
+
+
 }
 
 exports.postAnswer =  (req,res) => {
@@ -146,5 +98,14 @@ exports.reportAnswer =  (req,res) => {
       res.send(`Reported question with answer id ${answer_id}`);
     })
     .catch(err=>{throw err});
+
+}
+
+exports.test = (req,res) => {
+  db.query('select array_to_json(array_agg(row_to_json(t)))from (select id,url from photos where answer_id = 10) t;')
+  .then(result=>{
+    res.send(result);
+  })
+  .catch(err=>{throw err});
 
 }
