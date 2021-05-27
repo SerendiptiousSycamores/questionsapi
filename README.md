@@ -5,6 +5,6 @@ Welcome to my Back End Systems Design Project! The purpose of this project is to
 
 ## Dependencies
 * Backend: Node (reverse proxy), Express, NginX (reverse proxy + load balancer), PostgreSQL
-* Deployment: AWS EC2, AWS S3
+* Deployment: AWS EC2, AWS S3, Docker
 * Testing: Loader.io, k6
 
